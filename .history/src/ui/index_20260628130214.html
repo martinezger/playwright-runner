@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SIDE Builder</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header>
+    <div class="logo">▶ SIDE Builder</div>
+    <div class="project-settings">
+      <label>Project <input id="project-name" type="text" placeholder="My Project" autocomplete="off"></label>
+      <label>Base URL <input id="project-url" type="text" placeholder="https://" autocomplete="off"></label>
+    </div>
+    <div class="header-actions">
+      <button id="btn-run"    class="btn-run">▶ Run</button>
+      <button id="btn-stop"   class="btn-stop" style="display:none">■ Stop</button>
+      <div class="header-divider"></div>
+      <button id="btn-import" class="btn-secondary">↑ Import .side</button>
+      <button id="btn-export" class="btn-primary">↓ Export .side</button>
+      <input id="import-input" type="file" accept=".side,.json" style="display:none">
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ── LEFT: TEST CANVAS ──────────────────────────── -->
+    <section class="canvas-panel">
+
+      <div class="suite-bar">
+        <span class="bar-label">Suite</span>
+        <div id="suite-tabs" class="tabs"></div>
+        <button id="btn-add-suite" class="btn-icon" title="Add Suite">+</button>
+      </div>
+
+      <div class="suite-settings">
+        <label><input type="checkbox" id="persist-session"> Persist Session</label>
+        <label><input type="checkbox" id="parallel"> Parallel</label>
+        <label>Timeout (ms) <input type="number" id="suite-timeout" value="30000" min="0" step="1000"></label>
+      </div>
+
+      <div class="test-bar">
+        <span class="bar-label">Test</span>
+        <div id="test-tabs" class="tabs"></div>
+        <button id="btn-add-test" class="btn-icon" title="Add Test">+</button>
+      </div>
+
+      <div id="canvas" class="canvas">
+        <div id="drop-hint" class="drop-hint">
+          <div class="drop-hint-inner">
+            <span class="drop-hint-arrow">⇠</span>
+            <span class="drop-hint-text">Drag commands from the palette to build your test</span>
+            <span class="drop-hint-sub">or double-click any command to append it</span>
+          </div>
+        </div>
+        <div id="command-list" class="command-list"></div>
+      </div>
+
+      <!-- ── OUTPUT PANEL ──────────────────────────────── -->
+      <div class="output-panel" id="output-panel">
+        <div class="output-header" id="output-toggle">
+          <span class="output-status-dot" id="output-status-dot"></span>
+          <span class="output-title">Test Output</span>
+          <span class="output-summary" id="output-summary"></span>
+          <button class="output-clear" id="output-clear" title="Clear output">Clear</button>
+          <span class="output-chevron" id="output-chevron">▾</span>
+        </div>
+        <pre class="output-body" id="output-body"><span class="output-placeholder">Run your tests to see output here.</span></pre>
+      </div>
+
+    </section>
+
+    <!-- ── RIGHT: COMMAND PALETTE ─────────────────────── -->
+    <section class="palette-panel">
+      <div class="palette-header">
+        <span class="bar-label">Command Palette</span>
+        <input id="palette-search" class="search-input" type="text"
+               placeholder="🔍  Search commands…" autocomplete="off">
+      </div>
+      <div id="palette" class="palette"></div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
