@@ -11,7 +11,7 @@ Playwright SIDE Runner is a TypeScript toolkit that bridges the Selenium IDE rec
 
 ## Requirements
 
-- Node.js ≥ 18
+- Node.js ≥ 24
 - Python ≥ 3.9 *(for docs only)*
 
 ## Installation
@@ -83,8 +83,6 @@ Drag commands from the palette onto the canvas, organise them into suites and te
 | `npm run test:report` | Show last HTML report |
 | `npm run ui` | Start UI builder at `http://localhost:3000` |
 | `npm run docs` | Build & serve original docs at `http://localhost:8888` |
-| `npm run docs:zensical` | Build & serve Zensical docs at `http://localhost:8889` |
-
 ## Supported Commands
 
 Navigation · `open` `close` `setWindowSize` `selectFrame` `selectWindow`
