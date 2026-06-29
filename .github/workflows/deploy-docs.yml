@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'docs_zensical/**'
+      - 'docs/**'
       - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
 
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build Sphinx docs (Zensical)
+    name: Build Sphinx docs
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
