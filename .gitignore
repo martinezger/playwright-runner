@@ -1,4 +1,7 @@
+.history
 node_modules/
 playwright-report/
 test-results/
 fixtures/run_*.side
+docs/_build/
+docs_zensical/_build/

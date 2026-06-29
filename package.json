@@ -6,7 +6,9 @@
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:report": "playwright show-report",
-    "ui": "node src/ui/server.js"
+    "ui": "node src/ui/server.js",
+    "docs": "sphinx-build -b html docs docs/_build && python3 -m http.server --directory docs/_build 8888",
+    "docs:zensical": "sphinx-build -b html docs_zensical docs_zensical/_build && python3 -m http.server --directory docs_zensical/_build 8889"
   },
   "devDependencies": {
     "@playwright/test": "^1.45.0",
