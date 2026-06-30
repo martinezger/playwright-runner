@@ -12,7 +12,7 @@ const fs   = require('fs')
 const path = require('path')
 const { spawn } = require('child_process')
 
-const PORT         = process.env.PORT || 3001
+const PORT         = process.env.PORT || 3000
 const UI_DIR       = __dirname
 const PROJECT_ROOT = path.resolve(__dirname, '../..')
 const FIXTURES_DIR = path.join(PROJECT_ROOT, 'fixtures')
