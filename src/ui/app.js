@@ -181,6 +181,13 @@ function init() {
   // Canvas drag-and-drop
   setupCanvasDrop()
 
+  // View tabs
+  document.querySelectorAll('.view-tab').forEach(btn => {
+    btn.addEventListener('click', () => switchView(btn.dataset.view))
+  })
+  document.getElementById('btn-copy-code').addEventListener('click', copyCode)
+  document.getElementById('btn-download-code').addEventListener('click', downloadCode)
+
   renderAll()
 }
 
@@ -825,6 +832,335 @@ function toggleOutputPanel() {
   const chevron = document.getElementById('output-chevron')
   const collapsed = panel.classList.toggle('collapsed')
   chevron.textContent = collapsed ? '▸' : '▾'
+}
+
+// ── View switching ────────────────────────────────────────────────────────
+function switchView(view) {
+  document.querySelectorAll('.view-tab').forEach(b => b.classList.toggle('active', b.dataset.view === view))
+  const builder = document.getElementById('view-builder')
+  const code    = document.getElementById('view-code')
+  if (view === 'code') {
+    builder.style.display = 'none'
+    code.style.display    = 'flex'
+    renderCodeView()
+  } else {
+    code.style.display    = 'none'
+    builder.style.display = 'flex'
+  }
+}
+
+function renderCodeView() {
+  const ts       = generateTypeScriptCode()
+  const filename = (project.name || 'test').replace(/[^a-z0-9\-_]/gi, '_') + '.spec.ts'
+  document.getElementById('code-filename').textContent = filename
+  document.getElementById('code-content').innerHTML    = highlightTS(escHtml(ts))
+}
+
+function copyCode() {
+  const code = document.getElementById('code-content').textContent
+  navigator.clipboard.writeText(code).then(() => {
+    const btn = document.getElementById('btn-copy-code')
+    const orig = btn.textContent
+    btn.textContent = '✓ Copied'
+    setTimeout(() => { btn.textContent = orig }, 1500)
+  })
+}
+
+function downloadCode() {
+  const code     = document.getElementById('code-content').textContent
+  const filename = document.getElementById('code-filename').textContent
+  const blob     = new Blob([code], { type: 'text/typescript' })
+  const url      = URL.createObjectURL(blob)
+  const a        = document.createElement('a')
+  a.href = url; a.download = filename; a.click()
+  URL.revokeObjectURL(url)
+}
+
+// ── TypeScript code generator ─────────────────────────────────────────────
+function generateTypeScriptCode() {
+  const lines = []
+  const baseUrl = project.url || ''
+
+  lines.push(`import { test, expect } from '@playwright/test'`)
+  lines.push(``)
+  if (baseUrl) {
+    lines.push(`const BASE_URL = ${JSON.stringify(baseUrl)}`)
+    lines.push(``)
+  }
+
+  for (const suite of project.suites) {
+    const suiteTests = suite.tests
+      .map(id => project.tests.find(t => t.id === id))
+      .filter(Boolean)
+    if (suiteTests.length === 0) continue
+
+    const describeFn = suite.parallel ? 'test.describe.parallel' : 'test.describe'
+    lines.push(`${describeFn}(${JSON.stringify(suite.name)}, () => {`)
+
+    if (suite.persistSession) {
+      lines.push(`  // persistSession: shared context across tests`)
+      lines.push(`  let sharedPage`)
+      lines.push(`  test.beforeAll(async ({ browser }) => {`)
+      lines.push(`    const ctx = await browser.newContext()`)
+      lines.push(`    sharedPage = await ctx.newPage()`)
+      lines.push(`  })`)
+      lines.push(``)
+    }
+
+    for (const sideTest of suiteTests) {
+      const pageArg = suite.persistSession ? '' : '{ page }'
+      lines.push(``)
+      lines.push(`  test(${JSON.stringify(sideTest.name)}, async (${pageArg}) => {`)
+      if (suite.persistSession) {
+        lines.push(`    const page = sharedPage`)
+      }
+
+      const declaredVars = new Set()
+      for (const cmd of sideTest.commands) {
+        if (cmd.skip) {
+          lines.push(`    // [skipped] ${cmd.command}(${JSON.stringify(cmd.target || '')}, ${JSON.stringify(cmd.value || '')})`)
+          continue
+        }
+        if (cmd.comment) lines.push(`    // ${cmd.comment}`)
+        const codeLine = cmdToTS(cmd, baseUrl, declaredVars)
+        if (codeLine !== null) lines.push(`    ${codeLine}`)
+      }
+
+      lines.push(`  })`)
+    }
+
+    lines.push(`})`)
+    lines.push(``)
+  }
+
+  return lines.join('\n')
+}
+
+function locExpr(target) {
+  if (!target || target === '') return `page.locator('')`
+  const t = target.trim()
+  if (t.startsWith('id='))               return `page.locator(${JSON.stringify('#' + t.slice(3))})`
+  if (t.startsWith('name='))             return `page.locator('[name=${JSON.stringify(t.slice(5))}]')`
+  if (t.startsWith('css='))              return `page.locator(${JSON.stringify(t.slice(4))})`
+  if (t.startsWith('xpath='))            return `page.locator(${JSON.stringify(t.slice(6))})`
+  if (t.startsWith('//') || t.startsWith('(//')) return `page.locator(${JSON.stringify(t)})`
+  if (t.startsWith('link='))             return `page.getByRole('link', { name: ${JSON.stringify(t.slice(5))} })`
+  if (t.startsWith('linkText='))         return `page.getByRole('link', { name: ${JSON.stringify(t.slice(9))} })`
+  if (t.startsWith('partialLinkText='))  return `page.getByRole('link', { name: new RegExp(${JSON.stringify(t.slice(17))}, 'i') })`
+  return `page.locator(${JSON.stringify(t)})`
+}
+
+function varName(raw) {
+  if (!raw) return '_var'
+  return raw.replace(/[^a-zA-Z0-9_$]/g, '_').replace(/^([0-9])/, '_$1')
+}
+
+function varDecl(name, rhs, declared) {
+  const v = varName(name)
+  if (declared.has(v)) return `${v} = ${rhs}`
+  declared.add(v)
+  return `let ${v} = ${rhs}`
+}
+
+function cmdToTS(cmd, baseUrl, declared) {
+  const t   = cmd.target || ''
+  const v   = cmd.value  || ''
+  const loc = locExpr(t)
+
+  switch (cmd.command) {
+    // ── Navigation ────────────────────────────────────────────────────
+    case 'open':
+      if (t.startsWith('http://') || t.startsWith('https://'))
+        return `await page.goto(${JSON.stringify(t)})`
+      return `await page.goto(BASE_URL + ${JSON.stringify(t)})`
+
+    case 'close':          return `await page.close()`
+    case 'setWindowSize': {
+      const [w, h] = t.split('x')
+      return `await page.setViewportSize({ width: ${parseInt(w)}, height: ${parseInt(h)} })`
+    }
+    case 'selectFrame':
+      if (t === 'relative=top' || t === 'relative=parent')
+        return `// selectFrame(${t}) — frame context auto-managed in Playwright`
+      return `const frame = ${loc}.frameLocator(':scope')`
+    case 'selectWindow':
+      return `// selectWindow(${t}) — use page/context events to track windows`
+
+    // ── Interaction ───────────────────────────────────────────────────
+    case 'click':
+    case 'clickAt':        return `await ${loc}.click()`
+    case 'doubleClick':
+    case 'doubleClickAt':  return `await ${loc}.dblclick()`
+    case 'type':           return `await ${loc}.fill(${JSON.stringify(v)})`
+    case 'sendKeys':       return `await ${loc}.pressSequentially(${JSON.stringify(v)})`
+    case 'check':          return `await ${loc}.check()`
+    case 'uncheck':        return `await ${loc}.uncheck()`
+    case 'select':         return `await ${loc}.selectOption(${JSON.stringify(v)})`
+    case 'addSelection':   return `await ${loc}.selectOption([...await ${loc}.evaluate(el => [...el.selectedOptions].map(o => o.value)), ${JSON.stringify(v)}])`
+    case 'removeSelection':return `await ${loc}.evaluate((el, v) => { [...el.options].forEach(o => { if (o.value === v) o.selected = false }) }, ${JSON.stringify(v)})`
+    case 'mouseOver':      return `await ${loc}.hover()`
+    case 'mouseDown':      return `await ${loc}.dispatchEvent('mousedown')`
+    case 'mouseUp':        return `await ${loc}.dispatchEvent('mouseup')`
+    case 'mouseMoveAt': {
+      const [mx, my] = v.split(',')
+      return `await ${loc}.hover({ position: { x: ${parseInt(mx)||0}, y: ${parseInt(my)||0} } })`
+    }
+    case 'mouseOut':       return `await page.mouse.move(0, 0)`
+    case 'submit':         return `await ${loc}.evaluate(el => el.closest('form')?.submit())`
+    case 'editContent':    return `await ${loc}.evaluate((el, html) => { el.innerHTML = html }, ${JSON.stringify(v)})`
+    case 'dragAndDropToObject': return `await ${loc}.dragTo(${locExpr(v)})`
+
+    // ── Hard assertions ───────────────────────────────────────────────
+    case 'assertTitle':            return `await expect(page).toHaveTitle(${JSON.stringify(t)})`
+    case 'assertText':             return `await expect(${loc}).toHaveText(${JSON.stringify(v)})`
+    case 'assertNotText':          return `await expect(${loc}).not.toHaveText(${JSON.stringify(v)})`
+    case 'assertValue':            return `await expect(${loc}).toHaveValue(${JSON.stringify(v)})`
+    case 'assertChecked':          return `await expect(${loc}).toBeChecked()`
+    case 'assertNotChecked':       return `await expect(${loc}).not.toBeChecked()`
+    case 'assertEditable':         return `await expect(${loc}).toBeEditable()`
+    case 'assertNotEditable':      return `await expect(${loc}).not.toBeEditable()`
+    case 'assertElementPresent':   return `await expect(${loc}).toBeVisible()`
+    case 'assertElementNotPresent':return `await expect(${loc}).not.toBeVisible()`
+    case 'assertSelectedValue':    return `await expect(${loc}).toHaveValue(${JSON.stringify(v)})`
+    case 'assertSelectedLabel':    return `await expect(${loc}).toHaveText(${JSON.stringify(v)})`
+    case 'assertNotSelectedValue': return `await expect(${loc}).not.toHaveValue(${JSON.stringify(v)})`
+    case 'assertNotText':          return `await expect(${loc}).not.toHaveText(${JSON.stringify(v)})`
+    case 'assert':                 return `expect(${varName(t)}).toBe(${JSON.stringify(v)})`
+    case 'assertAlert':
+      return `await expect(page.waitForEvent('dialog').then(d => { const m = d.message(); d.accept(); return m })).resolves.toBe(${JSON.stringify(t)})`
+    case 'assertConfirmation':
+      return `await expect(page.waitForEvent('dialog').then(d => { const m = d.message(); d.accept(); return m })).resolves.toBe(${JSON.stringify(t)})`
+    case 'assertPrompt':
+      return `await expect(page.waitForEvent('dialog').then(d => { const m = d.message(); d.accept(); return m })).resolves.toBe(${JSON.stringify(t)})`
+
+    // ── Soft assertions ───────────────────────────────────────────────
+    case 'verifyTitle':            return `await expect.soft(page).toHaveTitle(${JSON.stringify(t)})`
+    case 'verifyText':             return `await expect.soft(${loc}).toHaveText(${JSON.stringify(v)})`
+    case 'verifyNotText':          return `await expect.soft(${loc}).not.toHaveText(${JSON.stringify(v)})`
+    case 'verifyValue':            return `await expect.soft(${loc}).toHaveValue(${JSON.stringify(v)})`
+    case 'verifyChecked':          return `await expect.soft(${loc}).toBeChecked()`
+    case 'verifyNotChecked':       return `await expect.soft(${loc}).not.toBeChecked()`
+    case 'verifyEditable':         return `await expect.soft(${loc}).toBeEditable()`
+    case 'verifyNotEditable':      return `await expect.soft(${loc}).not.toBeEditable()`
+    case 'verifyElementPresent':   return `await expect.soft(${loc}).toBeVisible()`
+    case 'verifyElementNotPresent':return `await expect.soft(${loc}).not.toBeVisible()`
+    case 'verifySelectedValue':    return `await expect.soft(${loc}).toHaveValue(${JSON.stringify(v)})`
+    case 'verifySelectedLabel':    return `await expect.soft(${loc}).toHaveText(${JSON.stringify(v)})`
+    case 'verify':                 return `expect.soft(${varName(t)}).toBe(${JSON.stringify(v)})`
+
+    // ── Waits ─────────────────────────────────────────────────────────
+    case 'waitForElementVisible':
+      return `await ${loc}.waitFor({ state: 'visible'${v ? `, timeout: ${parseInt(v)}` : ''} })`
+    case 'waitForElementNotVisible':
+      return `await ${loc}.waitFor({ state: 'hidden'${v ? `, timeout: ${parseInt(v)}` : ''} })`
+    case 'waitForElementPresent':
+      return `await ${loc}.waitFor({ state: 'attached'${v ? `, timeout: ${parseInt(v)}` : ''} })`
+    case 'waitForElementNotPresent':
+      return `await ${loc}.waitFor({ state: 'detached'${v ? `, timeout: ${parseInt(v)}` : ''} })`
+    case 'waitForElementEditable':    return `await expect(${loc}).toBeEditable()`
+    case 'waitForElementNotEditable': return `await expect(${loc}).not.toBeEditable()`
+
+    // ── Store ─────────────────────────────────────────────────────────
+    case 'store':           return varDecl(v, JSON.stringify(t), declared)
+    case 'storeText':       return varDecl(v, `await ${loc}.textContent()`, declared)
+    case 'storeValue':      return varDecl(v, `await ${loc}.inputValue()`, declared)
+    case 'storeTitle':      return varDecl(v, `await page.title()`, declared)
+    case 'storeWindowHandle': return varDecl(v, `page`, declared)
+    case 'storeXpathCount': return varDecl(v, `await page.locator(${JSON.stringify(t)}).count()`, declared)
+    case 'storeJson':       return varDecl(v, `JSON.parse(${JSON.stringify(t)})`, declared)
+    case 'storeAttribute': {
+      const atIdx   = t.lastIndexOf('@')
+      const locPart = atIdx !== -1 ? t.slice(0, atIdx) : t
+      const attr    = atIdx !== -1 ? t.slice(atIdx + 1) : ''
+      return varDecl(v, `await ${locExpr(locPart)}.getAttribute(${JSON.stringify(attr)})`, declared)
+    }
+
+    // ── Scripts ───────────────────────────────────────────────────────
+    case 'executeScript':
+      return v
+        ? varDecl(v, `await page.evaluate(() => { ${t} })`, declared)
+        : `await page.evaluate(() => { ${t} })`
+    case 'executeAsyncScript':
+      return v
+        ? varDecl(v, `await page.evaluate(async () => { ${t} })`, declared)
+        : `await page.evaluate(async () => { ${t} })`
+    case 'echo':     return `console.log(${JSON.stringify(t)})`
+    case 'pause':    return `await page.waitForTimeout(${parseInt(t) || 1000})`
+    case 'setSpeed': return `// setSpeed(${t}) — configure slowMo in playwright.config.ts instead`
+    case 'debugger': return `await page.pause() // debugger breakpoint`
+
+    // ── Alerts ────────────────────────────────────────────────────────
+    case 'webdriverAnswerOnVisiblePrompt':
+    case 'answerOnNextPrompt':
+      return `page.once('dialog', d => d.accept(${JSON.stringify(t)}))`
+    case 'webdriverChooseOkOnVisibleConfirmation':
+    case 'chooseOkOnNextConfirmation':
+      return `page.once('dialog', d => d.accept())`
+    case 'webdriverChooseCancelOnVisibleConfirmation':
+    case 'chooseCancelOnNextConfirmation':
+      return `page.once('dialog', d => d.dismiss())`
+
+    default:
+      return `// TODO: ${cmd.command}(${JSON.stringify(t)}, ${JSON.stringify(v)})`
+  }
+}
+
+// ── Minimal syntax highlighter ────────────────────────────────────────────
+function highlightTS(code) {
+  // Order matters: process strings/comments before keywords to avoid double-tagging
+  const tokens = []
+  let i = 0
+
+  while (i < code.length) {
+    // Line comment
+    if (code[i] === '/' && code[i+1] === '/') {
+      const end = code.indexOf('\n', i)
+      const slice = end === -1 ? code.slice(i) : code.slice(i, end)
+      tokens.push(`<span class="hl-comment">${slice}</span>`)
+      i += slice.length
+      continue
+    }
+    // Template literal
+    if (code[i] === '`') {
+      let j = i + 1
+      while (j < code.length && code[j] !== '`') { if (code[j] === '\\') j++; j++ }
+      tokens.push(`<span class="hl-string">${code.slice(i, j+1)}</span>`)
+      i = j + 1
+      continue
+    }
+    // String literal
+    if (code[i] === '"' || code[i] === "'") {
+      const q = code[i]; let j = i + 1
+      while (j < code.length && code[j] !== q) { if (code[j] === '\\') j++; j++ }
+      tokens.push(`<span class="hl-string">${code.slice(i, j+1)}</span>`)
+      i = j + 1
+      continue
+    }
+    // Word token (keyword / builtin / identifier)
+    if (/[a-zA-Z_$]/.test(code[i])) {
+      let j = i
+      while (j < code.length && /[a-zA-Z0-9_$]/.test(code[j])) j++
+      const word = code.slice(i, j)
+      const KEYWORDS = new Set(['import','from','export','const','let','var','async','await','return','new','true','false','null','undefined','for','of','if','else'])
+      const BUILTINS = new Set(['test','expect','page','describe','browser','context','JSON','console'])
+      if (KEYWORDS.has(word))      tokens.push(`<span class="hl-keyword">${word}</span>`)
+      else if (BUILTINS.has(word)) tokens.push(`<span class="hl-builtin">${word}</span>`)
+      else                         tokens.push(word)
+      i = j
+      continue
+    }
+    // Number
+    if (/[0-9]/.test(code[i])) {
+      let j = i
+      while (j < code.length && /[0-9.]/.test(code[j])) j++
+      tokens.push(`<span class="hl-number">${code.slice(i, j)}</span>`)
+      i = j
+      continue
+    }
+    tokens.push(code[i])
+    i++
+  }
+  return tokens.join('')
 }
 
 // ── Start ─────────────────────────────────────────────────────────────────

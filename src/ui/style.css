@@ -720,6 +720,101 @@ main {
 .line-fail    { color: #ff6e6e; }
 .line-summary { color: var(--accent); font-weight: bold; }
 .line-info    { color: var(--text-muted); }
+
+/* ── VIEW TABS (Builder / TypeScript) ────────────────────────────────────── */
+.view-tab-bar {
+  display: flex;
+  gap: 2px;
+  padding: 6px 10px 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.view-tab {
+  background: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 14px 6px;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  position: relative;
+  bottom: -1px;
+}
+.view-tab:hover { color: var(--text-muted); background: var(--surface-2); }
+.view-tab.active {
+  color: var(--accent);
+  background: var(--bg);
+  border-color: var(--border);
+  border-bottom-color: var(--bg);
+}
+
+#view-builder {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── CODE VIEW ───────────────────────────────────────────────────────────── */
+.code-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.code-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.code-filename {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.code-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.code-output {
+  flex: 1;
+  overflow: auto;
+  margin: 0;
+  padding: 16px 18px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  white-space: pre;
+  background: var(--bg);
+  color: var(--text);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  counter-reset: line;
+}
+
+/* Syntax-highlight token colours */
+.hl-keyword  { color: #c792ea; }
+.hl-builtin  { color: #82aaff; }
+.hl-string   { color: #c3e88d; }
+.hl-comment  { color: #546e7a; font-style: italic; }
+.hl-fn       { color: #82aaff; }
+.hl-number   { color: #f78c6c; }
 ::-webkit-scrollbar             { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track       { background: transparent; }
 ::-webkit-scrollbar-thumb       { background: var(--border); border-radius: 3px; }

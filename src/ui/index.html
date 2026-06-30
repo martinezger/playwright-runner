@@ -29,6 +29,15 @@
     <!-- ── LEFT: TEST CANVAS ──────────────────────────── -->
     <section class="canvas-panel">
 
+      <!-- View switcher tabs -->
+      <div class="view-tab-bar">
+        <button class="view-tab active" id="tab-builder" data-view="builder">Builder</button>
+        <button class="view-tab"        id="tab-code"    data-view="code">{ } TypeScript</button>
+      </div>
+
+      <!-- ── BUILDER VIEW ──────────────────────────────── -->
+      <div id="view-builder">
+
       <div class="suite-bar">
         <span class="bar-label">Suite</span>
         <div id="suite-tabs" class="tabs"></div>
@@ -69,6 +78,20 @@
         </div>
         <pre class="output-body" id="output-body"><span class="output-placeholder">Run your tests to see output here.</span></pre>
       </div>
+
+      </div><!-- /view-builder -->
+
+      <!-- ── CODE VIEW ─────────────────────────────────── -->
+      <div id="view-code" class="code-view" style="display:none">
+        <div class="code-toolbar">
+          <span class="code-filename" id="code-filename">test.spec.ts</span>
+          <div class="code-actions">
+            <button id="btn-copy-code"     class="btn-secondary" title="Copy to clipboard">⎘ Copy</button>
+            <button id="btn-download-code" class="btn-secondary" title="Download .ts file">↓ Download .ts</button>
+          </div>
+        </div>
+        <pre class="code-output" id="code-output"><code id="code-content"></code></pre>
+      </div><!-- /view-code -->
 
     </section>
 
